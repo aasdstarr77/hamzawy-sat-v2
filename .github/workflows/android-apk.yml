@@ -1,32 +1,44 @@
 name: Build Hamzawy Sat Android APK
 
 on:
-  push:
-    branches: [android-apk-integration]
-  workflow_dispatch:
+push:
+branches:
+- android-apk-integration
+workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - - name: Setup Android SDK
-  uses: android-actions/setup-android@v4
-  with:
-    packages: 'platform-tools'
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.1'
-      - name: Build APK
-        run: gradle assembleDebug --stacktrace
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hamzawy-sat-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+build:
+runs-on: ubuntu-latest
+
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
+
+  - name: Setup Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
+
+  - name: Setup Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      packages: 'platform-tools'
+
+  - name: Install Android SDK packages
+    run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+  - name: Setup Gradle
+    uses: gradle/actions/setup-gradle@v4
+    with:
+      gradle-version: '8.1'
+
+  - name: Build APK
+    run: gradle assembleDebug --stacktrace
+
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: hamzawy-sat-debug-apk
+      path: app/build/outputs/apk/debug/*.apk
+      if-no-files-found: error
