@@ -1,0 +1,1 @@
+2 doneprintf %s\n package com.hamzawy.sat.data object RequestManager{ fun canAccept(s:TechnicianStatus):Boolean=s==TechnicianStatus.APPROVED fun canViewCustomer(s:TechnicianStatus):Boolean=s==TechnicianStatus.APPROVED fun msg(s:TechnicianStatus):String=when(s){TechnicianStatus.PENDING->"قيد المراجعة"; TechnicianStatus.SUSPENDED->"تم تعليقك"; else->"نشط"} }
