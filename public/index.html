@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>حمزاوي سات | لوحة التحكم</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="login" class="login-wrap">
+  <div class="login-card">
+    <div class="brand"><div class="brand-mark">📡</div><div><h1>حمزاوي سات</h1><p>لوحة تحكم الإدارة</p></div></div>
+    <div class="section-title">تسجيل دخول الأدمن</div>
+    <label>رقم الهاتف<input id="loginPhone" inputmode="tel" autocomplete="username" placeholder="01xxxxxxxxx"></label>
+    <label>كلمة المرور<input id="loginPassword" type="password" autocomplete="current-password" placeholder="كلمة المرور"></label>
+    <label>عنوان الـ Backend<input id="apiInput" dir="ltr" placeholder="http://127.0.0.1:3000/api"></label>
+    <button class="primary wide" onclick="login()">دخول إلى لوحة التحكم</button>
+    <button class="secondary wide" onclick="testConnection()">اختبار اتصال الـ Backend</button>
+    <div id="loginMsg" class="msg"></div>
+    <div class="hint">لو الـBackend شغال على نفس الموبايل: استخدم <b dir="ltr">http://127.0.0.1:3000/api</b></div>
+  </div>
+</div>
+<div id="app" hidden>
+<header>
+  <div class="brand"><div class="brand-mark small">📡</div><div><h1>حمزاوي سات</h1><span>لوحة تحكم الأدمن</span></div></div>
+  <div class="header-actions"><span id="connectionBadge" class="connection">● متصل</span><button onclick="logout()">خروج</button></div>
+</header>
+<main>
+<section class="welcome"><div><h2>أهلاً بك 👋</h2><p>إدارة الطلبات والفنيين والشحن من مكان واحد.</p></div><button class="secondary" onclick="refreshAll()">↻ تحديث البيانات</button></section>
+<section class="cards">
+<div class="card"><div class="card-icon">📋</div><b id="ordersCount">0</b><span>إجمالي الطلبات</span></div>
+<div class="card"><div class="card-icon">📢</div><b id="availableCount">0</b><span>طلبات منشورة للفنيين</span></div>
+<div class="card"><div class="card-icon">👨‍🔧</div><b id="techCount">0</b><span>إجمالي الفنيين</span></div>
+<div class="card"><div class="card-icon">💳</div><b id="rechargeCount">0</b><span>شحنات معلقة</span></div>
+</section>
+<nav class="tabs"><button class="active" onclick="show('orders',this)">📋 الطلبات</button><button onclick="show('techs',this)">👨‍🔧 الفنيين</button><button onclick="show('recharges',this)">💳 الشحن</button><button onclick="show('wallet',this)">💰 المحفظة</button><button onclick="show('transactions',this)">🧾 المعاملات</button></nav>
+<section id="orders" class="panel active"><div class="panel-head"><div><h2>طلبات العملاء</h2><p>راجع الطلب، حدد السعر والخصم ثم انشره للفنيين.</p></div></div><div id="ordersList"></div></section>
+<section id="techs" class="panel"><div class="panel-head"><div><h2>الفنيين</h2><p>طلبات تسجيل الفنيين واعتماد الحسابات.</p></div></div><div id="techsList"></div></section>
+<section id="recharges" class="panel"><div class="panel-head"><div><h2>طلبات شحن الرصيد</h2><p>راجع التحويلات واعتمد أو ارفض طلبات الشحن.</p></div></div><div id="rechargesList"></div></section>
+<section id="wallet" class="panel"><div class="panel-head"><div><h2>بيانات محفظة الشحن</h2><p>البيانات التي تظهر للفني عند طلب الشحن.</p></div></div><div id="walletForm" class="form-grid"></div></section>
+<section id="transactions" class="panel"><div class="panel-head"><div><h2>سجل المعاملات</h2><p>حركة الخصومات وعمليات الشحن.</p></div></div><div id="transactionsList"></div></section>
+<div id="globalMsg" class="msg"></div>
+</main></div><script src="app.js"></script>
+</body></html>
