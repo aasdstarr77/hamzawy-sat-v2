@@ -1,1 +1,47 @@
-login doneprintf %s\n package com.hamzawy.sat.ui import androidx.compose.foundation.layout.* import androidx.compose.material3.* import androidx.compose.runtime.* import androidx.compose.ui.Modifier import androidx.compose.ui.graphics.Color import androidx.compose.ui.unit.dp import com.hamzawy.sat.data.RequestManager import com.hamzawy.sat.data.Technician @Composable fun TechnicianHomeScreen(tech:Technician){Column(Modifier.padding(16.dp)){Text("اهلا ${tech.name} - ${RequestManager.msg(tech.status)}"); Spacer(Modifier.height(12.dp)); Card{Column(Modifier.padding(12.dp)){Text("طلب جديد: تركيب دش"); if(RequestManager.canViewCustomer(tech.status)){Text("رقم العميل: 01012345678")} else {Text("⛔ حسابك معلق - ممنوع عرض بيانات العميل", color=Color.Red)}; Spacer(Modifier.height(8.dp)); Button(enabled=RequestManager.canAccept(tech.status), onClick={}){Text(if(RequestManager.canAccept(tech.status))"قبول الطلب" else "موقوف")} } } } }
+package com.hamzawy.sat.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.hamzawy.sat.data.RequestManager
+import com.hamzawy.sat.data.Technician
+
+@Composable
+fun TechnicianHomeScreen(tech: Technician) {
+    Column(Modifier.padding(16.dp)) {
+        Text("أهلاً ${tech.name} - ${RequestManager.msg(tech.status)}")
+        Spacer(Modifier.height(12.dp))
+
+        Card {
+            Column(Modifier.padding(12.dp)) {
+                Text("طلب جديد: تركيب دش")
+
+                if (RequestManager.canViewCustomer(tech.status)) {
+                    Text("رقم العميل: 01012345678")
+                } else {
+                    Text(
+                        "⛔ حسابك معلق - ممنوع عرض بيانات العميل",
+                        color = Color.Red
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Button(
+                    enabled = RequestManager.canAccept(tech.status),
+                    onClick = {}
+                ) {
+                    Text(
+                        if (RequestManager.canAccept(tech.status)) {
+                            "قبول الطلب"
+                        } else {
+                            "موقوف"
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
