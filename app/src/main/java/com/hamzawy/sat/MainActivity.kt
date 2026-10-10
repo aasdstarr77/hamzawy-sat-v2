@@ -1,5 +1,9 @@
 package com.hamzawy.sat
 
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -58,8 +62,47 @@ private fun HamzawyApp() {
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
+    var trackingLoading by remember { mutableStateOf(false) }
+    var trackingResult by remember { mutableStateOf<TrackOrderResponse?>(null) }
+    var trackingError by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf("") }
-    var service by remember { mutableStateOf("تركيب دش") }
+    var service by remember { mutableStateOf("satellite") }
+    var services by remember { mutableStateOf<List<ServiceItem>>(emptyList()) }
+    var servicesLoading by remember { mutableStateOf(false) }
+    var servicesError by remember { mutableStateOf("") }
+
+    LaunchedEffect(page) {
+        if (page == Page.NEW_ORDER) {
+            servicesLoading = true
+            servicesError = ""
+            ApiClient.api.getServices().enqueue(object : Callback<List<ServiceItem>> {
+                override fun onResponse(
+                    call: Call<List<ServiceItem>>,
+                    response: Response<List<ServiceItem>>
+                ) {
+                    servicesLoading = false
+                    if (response.isSuccessful) {
+                        services = response.body().orEmpty().filter { it.active }
+                        if (services.none { it.id == service }) {
+                            service = services.firstOrNull()?.id.orEmpty()
+                        }
+                        servicesError = if (services.isEmpty()) {
+                            "لا توجد خدمات متاحة حاليًا."
+                        } else {
+                            ""
+                        }
+                    } else {
+                        servicesError = "تعذر تحميل الخدمات (HTTP ${response.code()})."
+                    }
+                }
+
+                override fun onFailure(call: Call<List<ServiceItem>>, t: Throwable) {
+                    servicesLoading = false
+                    servicesError = "تعذر الاتصال بالخادم. تأكد أنه يعمل ثم حاول الرجوع وفتح الشاشة مجددًا."
+                }
+            })
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(Pale)) {
         if (page != Page.START) {
@@ -91,11 +134,55 @@ private fun HamzawyApp() {
                     onTrack = { page = Page.TRACK },
                     onProfile = { page = Page.PROFILE }
                 )
-                Page.TRACK -> FormPage("متابعة الطلب", "اكتب كود الطلب", code, { code = it }, "بحث عن الطلب") {
-                    notice = "واجهة البحث جاهزة، لكن لم يتم الاتصال بالخادم بعد؛ لا توجد نتيجة طلب فعلية."
-                }.also { }
-                Page.NEW_ORDER -> ServicePage(service, { service = it }, notice) {
-                    notice = "تم تجهيز اختيار الخدمة في الواجهة فقط. إرسال الطلب يحتاج ربط الخادم."
+                Page.TRACK -> TrackPage(
+                    code = code,
+                    onCodeChange = { code = it },
+                    loading = trackingLoading,
+                    result = trackingResult,
+                    error = trackingError
+                ) {
+                    val orderCode = code.trim()
+                    if (orderCode.isBlank()) {
+                        trackingError = "اكتب كود الطلب أولًا."
+                        trackingResult = null
+                    } else {
+                        trackingLoading = true
+                        trackingError = ""
+                        trackingResult = null
+                        ApiClient.api.trackOrder(orderCode).enqueue(object : Callback<TrackOrderResponse> {
+                            override fun onResponse(
+                                call: Call<TrackOrderResponse>,
+                                response: Response<TrackOrderResponse>
+                            ) {
+                                trackingLoading = false
+                                val body = response.body()
+                                if (response.isSuccessful && body != null) {
+                                    trackingResult = body
+                                } else {
+                                    trackingError = if (response.code() == 404) {
+                                        "لم يتم العثور على طلب بهذا الكود."
+                                    } else {
+                                        "تعذر جلب الطلب (HTTP ${response.code()})."
+                                    }
+                                }
+                            }
+
+                            override fun onFailure(call: Call<TrackOrderResponse>, t: Throwable) {
+                                trackingLoading = false
+                                trackingError = "تعذر الاتصال بالخادم. تحقق من عنوان الخادم واتصال الإنترنت."
+                            }
+                        })
+                    }
+                }
+                Page.NEW_ORDER -> ServicePage(
+                    service = service,
+                    services = services,
+                    loading = servicesLoading,
+                    error = servicesError,
+                    onService = { service = it },
+                    notice = notice
+                ) {
+                    notice = "اختيار الخدمة جاهز. إرسال الطلب لم يتم تفعيله بعد."
                 }
                 Page.PROFILE -> SimpleDashboard("حساب العميل", listOf("بيانات الحساب", "طلباتي", "مساعدة ودعم"), { notice = it }, notice)
             }
@@ -243,24 +330,141 @@ private fun FormPage(title: String, label: String, value: String, onValue: (Stri
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ServicePage(service: String, onService: (String) -> Unit, notice: String, onSubmit: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
-        Text("طلب خدمة جديدة", fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Text("اختار نوع الخدمة المطلوبة", color = Color.Gray)
-        Spacer(Modifier.height(20.dp))
-        listOf("تركيب دش", "صيانة دش", "تركيب كاميرات", "صيانة أجهزة", "تركيب تلفزيون").forEach { item ->
-            Card(onClick = { onService(item) }, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = if (service == item) Color(0xFFDCEEFF) else Color.White)) {
-                Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = service == item, onClick = { onService(item) })
-                    Spacer(Modifier.width(8.dp))
-                    Text(item, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+private fun TrackPage(
+    code: String,
+    onCodeChange: (String) -> Unit,
+    loading: Boolean,
+    result: TrackOrderResponse?,
+    error: String,
+    onSubmit: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(28.dp))
+        Text("متابعة الطلب", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Text("اكتب كود الطلب لمعرفة آخر تحديث", color = Color.Gray)
+        Spacer(Modifier.height(24.dp))
+        OutlinedTextField(
+            value = code,
+            onValueChange = onCodeChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("كود الطلب") },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onSubmit,
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            if (loading) CircularProgressIndicator()
+            else Text("بحث عن الطلب")
+        }
+        if (error.isNotBlank()) {
+            Spacer(Modifier.height(16.dp))
+            Text(error, color = MaterialTheme.colorScheme.error)
+        }
+        if (result != null) {
+            Spacer(Modifier.height(20.dp))
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("تفاصيل الطلب", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Text("الكود: ${result.id}")
+                    Text("الخدمة: ${result.serviceName}")
+                    val statusText = when (result.status) {
+                        "new" -> "تم استلام الطلب، وجارٍ تحديد السعر"
+                        "available" -> "تم تحديد السعر والطلب متاح"
+                        "opened" -> "تم فتح الطلب بواسطة فني"
+                        "completed" -> "مكتمل"
+                        else -> result.status
+                    }
+                    Text("الحالة: $statusText")
+                    if (result.agreedPrice != null) {
+                        Text("السعر المتفق عليه: ${result.agreedPrice}")
+                    }
                 }
             }
         }
-        Button(onClick = onSubmit, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp)) { Text("متابعة الطلب") }
-        if (notice.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(notice, color = Color(0xFF9A5600), fontSize = 13.sp) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServicePage(
+    service: String,
+    services: List<ServiceItem>,
+    loading: Boolean,
+    error: String,
+    onService: (String) -> Unit,
+    notice: String,
+    onSubmit: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(22.dp)
+    ) {
+        Text("طلب خدمة جديدة", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Text("اختار نوع الخدمة المطلوبة", color = Color.Gray)
+        Spacer(Modifier.height(20.dp))
+
+        if (loading) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text("جاري تحميل الخدمات...")
+        }
+
+        if (error.isNotBlank()) {
+            Text(error, color = Color(0xFF9A5600), fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = { onService(service) }) {
+                Text("اختار خدمة بعد التأكد من الاتصال")
+            }
+        }
+
+        services.forEach { item ->
+            Card(
+                onClick = { onService(item.id) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (service == item.id) Color(0xFFDCEEFF) else Color.White
+                )
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(17.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = service == item.id,
+                        onClick = { onService(item.id) }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(item.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Button(
+            onClick = onSubmit,
+            enabled = !loading && services.isNotEmpty() && services.any { it.id == service },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Text("متابعة الطلب")
+        }
+
+        if (notice.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text(notice, color = Color(0xFF9A5600), fontSize = 13.sp)
+        }
     }
 }
 
