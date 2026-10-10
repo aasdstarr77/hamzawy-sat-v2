@@ -64,13 +64,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Page { START, TECH_LOGIN, TECH_HOME, CUSTOMER_HOME, TRACK, NEW_ORDER, PROFILE }
+private enum class Page { START, TECH_LOGIN, TECH_REGISTER, TECH_HOME, CUSTOMER_HOME, TRACK, NEW_ORDER, PROFILE }
 
 @Composable
 private fun HamzawyApp() {
     var page by remember { mutableStateOf(Page.START) }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var technicianName by remember { mutableStateOf("") }
+    var technicianArea by remember { mutableStateOf("") }
+    var technicianAuthLoading by remember { mutableStateOf(false) }
+    var technicianToken by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var trackingLoading by remember { mutableStateOf(false) }
     var trackingResult by remember { mutableStateOf<TrackOrderResponse?>(null) }
@@ -137,9 +141,98 @@ private fun HamzawyApp() {
                     onTechnician = { notice = ""; page = Page.TECH_LOGIN },
                     onCustomer = { notice = ""; page = Page.CUSTOMER_HOME }
                 )
-                Page.TECH_LOGIN -> TechnicianLogin(phone, { phone = it }, password, { password = it }, notice) {
-                    notice = "واجهة الدخول جاهزة للتصميم، لكن التحقق من الحساب يحتاج ربط الخادم. لم يتم تسجيل الدخول."
+                Page.TECH_LOGIN -> TechnicianLogin(
+    phone, { phone = it }, password, { password = it }, notice,
+    onRegister = { notice = ""; page = Page.TECH_REGISTER }, loading = technicianAuthLoading
+) {
+    if (phone.isBlank() || password.isBlank()) {
+        notice = "اكتب رقم الهاتف وكلمة المرور."
+    } else {
+        technicianAuthLoading = true
+        notice = ""
+        ApiClient.api.loginTechnician(
+            TechnicianLoginRequest(phone.trim(), password)
+        ).enqueue(object : Callback<TechnicianAuthResponse> {
+            override fun onResponse(
+                call: Call<TechnicianAuthResponse>,
+                response: Response<TechnicianAuthResponse>
+            ) {
+                technicianAuthLoading = false
+                val body = response.body()
+                if (response.isSuccessful && !body?.token.isNullOrBlank()) {
+                    technicianToken = body!!.token!!
+                    notice = ""
+                    page = Page.TECH_HOME
+                } else {
+                    notice = when (response.code()) {
+                        401 -> "رقم الهاتف أو كلمة المرور غير صحيحة."
+                        403 -> "حسابك في انتظار موافقة الإدارة."
+                        else -> body?.error ?: body?.message ?: "تعذر تسجيل الدخول."
+                    }
                 }
+            }
+
+            override fun onFailure(
+                call: Call<TechnicianAuthResponse>,
+                t: Throwable
+            ) {
+                technicianAuthLoading = false
+                notice = "تعذر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى."
+            }
+        })
+    }
+}
+Page.TECH_REGISTER -> TechnicianRegisterPage(
+    technicianName, { technicianName = it },
+    phone, { phone = it },
+    password, { password = it },
+    technicianArea, { technicianArea = it },
+    technicianAuthLoading, notice
+) {
+    when {
+        technicianName.isBlank() || phone.isBlank() || technicianArea.isBlank() || password.isBlank() ->
+            notice = "اكمل كل البيانات المطلوبة."
+        password.length < 8 ->
+            notice = "كلمة المرور لازم تكون 8 أحرف على الأقل."
+        else -> {
+            technicianAuthLoading = true
+            notice = ""
+            ApiClient.api.registerTechnician(
+                TechnicianRegisterRequest(
+                    technicianName.trim(), phone.trim(),
+                    password, technicianArea.trim()
+                )
+            ).enqueue(object : Callback<TechnicianAuthResponse> {
+                override fun onResponse(
+                    call: Call<TechnicianAuthResponse>,
+                    response: Response<TechnicianAuthResponse>
+                ) {
+                    technicianAuthLoading = false
+                    val body = response.body()
+                    if (response.isSuccessful) {
+                        notice = body?.message
+                            ?: "تم إنشاء الحساب، وهو في انتظار موافقة الإدارة."
+                        password = ""
+                        page = Page.TECH_LOGIN
+                    } else {
+                        notice = when (response.code()) {
+                            409 -> "رقم الهاتف مسجل بالفعل."
+                            else -> body?.error ?: body?.message ?: "تعذر إنشاء الحساب."
+                        }
+                    }
+                }
+
+                override fun onFailure(
+                    call: Call<TechnicianAuthResponse>,
+                    t: Throwable
+                ) {
+                    technicianAuthLoading = false
+                    notice = "تعذر الاتصال بالخادم. حاول مرة أخرى."
+                }
+            })
+        }
+    }
+}
                 Page.TECH_HOME -> SimpleDashboard("لوحة الفني", listOf("الطلبات المتاحة", "طلباتي", "المحفظة", "حسابي"), { notice = it }, notice)
                 Page.CUSTOMER_HOME -> CustomerPage(
                     onNew = { page = Page.NEW_ORDER },
@@ -307,7 +400,7 @@ private fun RoleButton(title: String, description: String, symbol: String, color
 }
 
 @Composable
-private fun TechnicianLogin(phone: String, onPhone: (String) -> Unit, password: String, onPassword: (String) -> Unit, notice: String, onLogin: () -> Unit) {
+private fun TechnicianLogin(phone: String, onPhone: (String) -> Unit, password: String, onPassword: (String) -> Unit, notice: String, onRegister: () -> Unit, loading: Boolean = false, onLogin: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(18.dp))
         SatelliteLogo(78)
@@ -319,8 +412,37 @@ private fun TechnicianLogin(phone: String, onPhone: (String) -> Unit, password: 
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(value = password, onValueChange = onPassword, modifier = Modifier.fillMaxWidth(), label = { Text("كلمة المرور") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onLogin, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) { Text("دخول", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        Button(onClick = onLogin, enabled = !loading, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) { Text(if (loading) "جارٍ تسجيل الدخول..." else "دخول", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        TextButton(onClick = onRegister) { Text("إنشاء حساب فني جديد") }
         if (notice.isNotBlank()) { Spacer(Modifier.height(14.dp)); Text(notice, color = Color(0xFF9A5600), textAlign = TextAlign.Center, fontSize = 13.sp) }
+    }
+}
+
+@Composable
+private fun TechnicianRegisterPage(
+    name: String, onName: (String) -> Unit,
+    phone: String, onPhone: (String) -> Unit,
+    password: String, onPassword: (String) -> Unit,
+    area: String, onArea: (String) -> Unit,
+    loading: Boolean, notice: String, onRegister: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        SatelliteLogo(72)
+        Spacer(Modifier.height(12.dp))
+        Text("إنشاء حساب فني جديد", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(18.dp))
+        OutlinedTextField(value = name, onValueChange = onName, modifier = Modifier.fillMaxWidth(), label = { Text("الاسم بالكامل") }, singleLine = true)
+        OutlinedTextField(value = phone, onValueChange = onPhone, modifier = Modifier.fillMaxWidth(), label = { Text("رقم الهاتف") }, singleLine = true)
+        OutlinedTextField(value = area, onValueChange = onArea, modifier = Modifier.fillMaxWidth(), label = { Text("المنطقة") }, singleLine = true)
+        OutlinedTextField(value = password, onValueChange = onPassword, modifier = Modifier.fillMaxWidth(), label = { Text("كلمة المرور (8 أحرف على الأقل)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRegister, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+            Text(if (loading) "جارٍ إنشاء الحساب..." else "إنشاء الحساب")
+        }
+        if (notice.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text(notice, color = Color(0xFF9A5600), textAlign = TextAlign.Center)
+        }
     }
 }
 

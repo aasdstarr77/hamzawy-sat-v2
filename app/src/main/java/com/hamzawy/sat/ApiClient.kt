@@ -5,6 +5,7 @@ import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.Part
@@ -32,6 +33,34 @@ val agreedPrice: Int? = null,
 val error: String? = null
 )
 
+
+data class TechnicianRegisterRequest(
+    val name: String,
+    val phone: String,
+    val password: String,
+    val area: String
+)
+
+data class TechnicianLoginRequest(
+    val phone: String,
+    val password: String
+)
+
+data class TechnicianAuthResponse(
+    val ok: Boolean = false,
+    val token: String? = null,
+    val message: String? = null,
+    val error: String? = null,
+    val technician: TechnicianInfo? = null
+)
+
+data class TechnicianInfo(
+    val id: String,
+    val name: String,
+    val phone: String,
+    val balance: Int = 0
+)
+
 interface HamzawyApi {
 @GET("api/services")
 fun getServices(): Call<List<ServiceItem>>
@@ -47,6 +76,17 @@ fun createOrder(
     @Part("description") description: RequestBody,
     @Part photo: MultipartBody.Part? = null
 ): Call<CreateOrderResponse>
+
+
+@POST("api/technicians/register")
+fun registerTechnician(
+    @Body request: TechnicianRegisterRequest
+): Call<TechnicianAuthResponse>
+
+@POST("api/technicians/login")
+fun loginTechnician(
+    @Body request: TechnicianLoginRequest
+): Call<TechnicianAuthResponse>
 
 @GET("api/orders/{id}")
 fun trackOrder(@Path("id") id: String): Call<TrackOrderResponse>
