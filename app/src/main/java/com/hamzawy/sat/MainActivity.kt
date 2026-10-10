@@ -1,8 +1,18 @@
 package com.hamzawy.sat
+import android.content.Context
+import java.io.ByteArrayOutputStream
+import android.net.Uri
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import okhttp3.MultipartBody
 
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -70,6 +80,8 @@ private fun HamzawyApp() {
     var services by remember { mutableStateOf<List<ServiceItem>>(emptyList()) }
     var servicesLoading by remember { mutableStateOf(false) }
     var servicesError by remember { mutableStateOf("") }
+    var orderSubmitting by remember { mutableStateOf(false) }
+    var createdOrderId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(page) {
         if (page == Page.NEW_ORDER) {
@@ -180,9 +192,44 @@ private fun HamzawyApp() {
                     loading = servicesLoading,
                     error = servicesError,
                     onService = { service = it },
-                    notice = notice
-                ) {
-                    notice = "اختيار الخدمة جاهز. إرسال الطلب لم يتم تفعيله بعد."
+                    notice = notice,
+                    submitting = orderSubmitting,
+                    createdOrderId = createdOrderId
+                ) { name, customerPhone, area, address, description, photoPart ->
+                    notice = ""
+                    createdOrderId = null
+                    orderSubmitting = true
+                    val plainText = "text/plain".toMediaType()
+                    ApiClient.api.createOrder(
+                        service.toRequestBody(plainText),
+                        name.toRequestBody(plainText),
+                        customerPhone.toRequestBody(plainText),
+                        area.toRequestBody(plainText),
+                        address.toRequestBody(plainText),
+                        description.toRequestBody(plainText),
+                        photoPart
+                    ).enqueue(object : Callback<CreateOrderResponse> {
+                        override fun onResponse(
+                            call: Call<CreateOrderResponse>,
+                            response: Response<CreateOrderResponse>
+                        ) {
+                            orderSubmitting = false
+                            val body = response.body()
+                            if (response.isSuccessful && body?.ok == true && !body.orderId.isNullOrBlank()) {
+                                createdOrderId = body.orderId
+                                code = body.orderId
+                                notice = "تم إرسال طلبك بنجاح."
+                            } else {
+                                notice = body?.error ?: body?.message
+                                    ?: "تعذر إرسال الطلب (HTTP ${response.code()}). حاول مرة أخرى."
+                            }
+                        }
+
+                        override fun onFailure(call: Call<CreateOrderResponse>, t: Throwable) {
+                            orderSubmitting = false
+                            notice = "فشل الاتصال بالخادم. تأكد أن الخادم يعمل ثم حاول مرة أخرى."
+                        }
+                    })
                 }
                 Page.PROFILE -> SimpleDashboard("حساب العميل", listOf("بيانات الحساب", "طلباتي", "مساعدة ودعم"), { notice = it }, notice)
             }
@@ -404,8 +451,20 @@ private fun ServicePage(
     error: String,
     onService: (String) -> Unit,
     notice: String,
-    onSubmit: () -> Unit
+    submitting: Boolean,
+    createdOrderId: String?,
+    onSubmit: (String, String, String, String, String, MultipartBody.Part?) -> Unit
 ) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf("") }
+    var customerPhone by remember { mutableStateOf("") }
+    var area by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf("") }
+    var selectedPhoto by remember { mutableStateOf<Uri?>(null) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> selectedPhoto = uri; validationError = "" }
+
     Column(
         Modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -424,14 +483,11 @@ private fun ServicePage(
         if (error.isNotBlank()) {
             Text(error, color = Color(0xFF9A5600), fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
-            TextButton(onClick = { onService(service) }) {
-                Text("اختار خدمة بعد التأكد من الاتصال")
-            }
         }
 
         services.forEach { item ->
             Card(
-                onClick = { onService(item.id) },
+                onClick = { onService(item.id); validationError = "" },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
@@ -444,7 +500,7 @@ private fun ServicePage(
                 ) {
                     RadioButton(
                         selected = service == item.id,
-                        onClick = { onService(item.id) }
+                        onClick = { onService(item.id); validationError = "" }
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(item.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -452,20 +508,127 @@ private fun ServicePage(
             }
         }
 
+        Spacer(Modifier.height(8.dp))
+        Text("بيانات العميل", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = name, onValueChange = { name = it; validationError = "" },
+            label = { Text("الاسم بالكامل") }, modifier = Modifier.fillMaxWidth(),
+            singleLine = true, enabled = !submitting
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = customerPhone, onValueChange = { customerPhone = it; validationError = "" },
+            label = { Text("رقم الهاتف") }, modifier = Modifier.fillMaxWidth(),
+            singleLine = true, enabled = !submitting
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = area, onValueChange = { area = it; validationError = "" },
+            label = { Text("المنطقة") }, modifier = Modifier.fillMaxWidth(),
+            singleLine = true, enabled = !submitting
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = address, onValueChange = { address = it; validationError = "" },
+            label = { Text("العنوان بالتفصيل") }, modifier = Modifier.fillMaxWidth(),
+            enabled = !submitting
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = description, onValueChange = { description = it; validationError = "" },
+            label = { Text("وصف العطل أو الخدمة المطلوبة") },
+            modifier = Modifier.fillMaxWidth(), minLines = 3, enabled = !submitting
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            enabled = !submitting,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (selectedPhoto == null) "اختيار صورة للعطل (اختياري)" else "تم اختيار صورة — اضغط للتغيير")
+        }
+        if (selectedPhoto != null) {
+            Text("تم اختيار صورة. سيتم إرفاقها عند إرسال الطلب.", color = Green, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        if (validationError.isNotBlank()) {
+            Text(validationError, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
+        }
+
         Button(
-            onClick = onSubmit,
-            enabled = !loading && services.isNotEmpty() && services.any { it.id == service },
+            onClick = {
+                when {
+                    service.isBlank() -> validationError = "اختار نوع الخدمة أولًا."
+                    name.isBlank() || customerPhone.isBlank() || area.isBlank() ||
+                        address.isBlank() || description.isBlank() ->
+                        validationError = "من فضلك املأ كل البيانات المطلوبة."
+                    customerPhone.filter { it.isDigit() }.length < 8 ->
+                        validationError = "اكتب رقم هاتف صحيحًا."
+                    else -> {
+                        validationError = ""
+                        try { val photoPart = selectedPhoto?.let { createPhotoPart(context, it) }; onSubmit(name.trim(), customerPhone.trim(), area.trim(), address.trim(), description.trim(), photoPart) } catch (e: Exception) { validationError = e.message ?: "تعذر تجهيز الصورة." }
+                    }
+                }
+            },
+            enabled = !loading && !submitting && services.any { it.id == service } && createdOrderId == null,
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text("متابعة الطلب")
+            if (submitting) CircularProgressIndicator(
+                modifier = Modifier.size(22.dp), strokeWidth = 2.dp,
+                color = Color.White
+            ) else Text("إرسال طلب الخدمة")
         }
 
         if (notice.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
-            Text(notice, color = Color(0xFF9A5600), fontSize = 13.sp)
+            Text(
+                notice,
+                color = if (createdOrderId != null) Green else Color(0xFF9A5600),
+                fontSize = 14.sp
+            )
+        }
+        if (createdOrderId != null) {
+            Spacer(Modifier.height(8.dp))
+            Text("كود طلبك:", fontWeight = FontWeight.Bold)
+            Text(createdOrderId, color = Blue, fontSize = 18.sp)
+            Text("احتفظ بالكود لاستخدامه في شاشة متابعة الطلب.", fontSize = 13.sp, color = Color.Gray)
         }
     }
+}
+
+private fun createPhotoPart(context: Context, uri: Uri): MultipartBody.Part {
+    val mime = context.contentResolver.getType(uri)
+        ?: throw IllegalArgumentException("تعذر تحديد نوع الصورة.")
+    if (mime !in listOf("image/jpeg", "image/png", "image/webp")) {
+        throw IllegalArgumentException("صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP.")
+    }
+    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > 5 * 1024 * 1024) {
+                throw IllegalArgumentException("حجم الصورة أكبر من 5 ميجابايت.")
+            }
+            output.write(buffer, 0, count)
+        }
+        output.toByteArray()
+    } ?: throw IllegalArgumentException("تعذر قراءة الصورة.")
+    val ext = when (mime) {
+        "image/jpeg" -> "jpg"
+        "image/png" -> "png"
+        else -> "webp"
+    }
+    val body = bytes.toRequestBody(mime.toMediaType())
+    return MultipartBody.Part.createFormData("photo", "photo." + ext, body)
 }
 
 @Composable
