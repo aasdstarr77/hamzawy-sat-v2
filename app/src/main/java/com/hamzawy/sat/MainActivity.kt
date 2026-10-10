@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 private val Navy = Color(0xFF071D3A)
 private val Blue = Color(0xFF0878E8)
@@ -141,8 +142,8 @@ private fun SatelliteLogo(size: Int) {
         drawArc(c, 220f, 100f, false, topLeft = androidx.compose.ui.geometry.Offset(w * .37f, h * .02f), size = androidx.compose.ui.geometry.Size(w * .58f, h * .58f), style = Stroke(width = w * .05f, cap = StrokeCap.Round))
         val dish = Path().apply {
             moveTo(w * .18f, h * .58f)
-            quadraticTo(w * .30f, h * .22f, w * .62f, h * .32f)
-            quadraticTo(w * .60f, h * .60f, w * .35f, h * .73f)
+            lineTo(w * .62f, h * .32f)
+            lineTo(w * .35f, h * .73f)
             close()
         }
         drawPath(dish, Color.White)
@@ -215,6 +216,7 @@ private fun CustomerPage(onNew: () -> Unit, onTrack: () -> Unit, onProfile: () -
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActionCard(title: String, description: String, symbol: String, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
@@ -241,6 +243,7 @@ private fun FormPage(title: String, label: String, value: String, onValue: (Stri
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServicePage(service: String, onService: (String) -> Unit, notice: String, onSubmit: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
